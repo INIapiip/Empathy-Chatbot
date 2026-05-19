@@ -1,606 +1,656 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
-import {
-  saveSessions,
-  loadSessions,
-  saveMode,
-  loadMode,
-} from "@/lib/storage";
+type UserProfile = {
+  language?: string;
+  name?: string;
+  age?: string;
+  gender?: string;
+  chatbotName?: string;
+};
+
+type ChatLayoutProps = {
+  profile?: UserProfile;
+};
 
 type Message = {
   role: "user" | "assistant";
   content: string;
+  emotion?: string;
+  riskLevel?: string;
+  responseTime?: number;
+  time?: string;
 };
 
-type Session = {
-  id: number;
-  title: string;
-  messages: Message[];
+type Mood = {
+  id: string;
+  labelId: string;
+  labelEn: string;
+  emoji: string;
 };
 
-export default function ChatLayout() {
+const moods: Mood[] = [
+  { id: "good", labelId: "Baik", labelEn: "Good", emoji: "😊" },
+  { id: "sad", labelId: "Sedih", labelEn: "Sad", emoji: "😔" },
+  { id: "angry", labelId: "Marah", labelEn: "Angry", emoji: "😤" },
+  { id: "anxious", labelId: "Cemas", labelEn: "Anxious", emoji: "😰" },
+  { id: "empty", labelId: "Hampa", labelEn: "Empty", emoji: "😶" },
+];
 
-  const [message, setMessage] = useState("");
+function normalizeLanguage(language?: string) {
+  if (!language) return "Bahasa Indonesia";
 
+  const value = language.toLowerCase().trim();
+
+  if (
+    value === "bahasa indonesia" ||
+    value === "indonesia" ||
+    value === "indonesian" ||
+    value === "id"
+  ) {
+    return "Bahasa Indonesia";
+  }
+
+  return "English";
+}
+
+function getStyleLabel(style: string, isIndonesian: boolean) {
+  if (style === "friendly") return isIndonesian ? "Santai" : "Friendly";
+  if (style === "angry") return isIndonesian ? "Marah" : "Angry";
+  if (style === "professional") {
+    return isIndonesian ? "Profesional" : "Professional";
+  }
+
+  return isIndonesian ? "Santai" : "Friendly";
+}
+
+function getTheme(style: string) {
+  if (style === "angry") {
+    return {
+      pageBg:
+        "linear-gradient(135deg, #fff4f4 0%, #ffe1e1 50%, #f8caca 100%)",
+      mainBg:
+        "linear-gradient(135deg, rgba(255,255,255,0.65), rgba(255,238,238,0.70))",
+      primary: "#c11a1a",
+      primarySoft: "rgba(193, 26, 26, 0.12)",
+      titleColor: "#c11a1a",
+      userBubble: "#c11a1a",
+      userText: "#ffffff",
+      shadow: "0 20px 55px rgba(130, 35, 35, 0.18)",
+    };
+  }
+
+  if (style === "professional") {
+    return {
+      pageBg:
+        "linear-gradient(135deg, #f1fcff 0%, #ddf7fc 50%, #c7edf7 100%)",
+      mainBg:
+        "linear-gradient(135deg, rgba(255,255,255,0.65), rgba(228,248,253,0.72))",
+      primary: "#1fadd1",
+      primarySoft: "rgba(31, 173, 209, 0.12)",
+      titleColor: "#1fadd1",
+      userBubble: "#1fadd1",
+      userText: "#ffffff",
+      shadow: "0 20px 55px rgba(35, 110, 130, 0.18)",
+    };
+  }
+
+  return {
+    pageBg:
+      "linear-gradient(135deg, #f1fff8 0%, #dcfff0 50%, #c5f6de 100%)",
+    mainBg:
+      "linear-gradient(135deg, rgba(255,255,255,0.65), rgba(229,255,241,0.72))",
+    primary: "#5becb4",
+    primarySoft: "rgba(91, 236, 180, 0.16)",
+    titleColor: "#d56bd9",
+    userBubble: "#5becb4",
+    userText: "#18392d",
+    shadow: "0 20px 55px rgba(39, 126, 84, 0.18)",
+  };
+}
+
+export default function ChatLayout({ profile }: ChatLayoutProps) {
+  const safeProfile: UserProfile = {
+    language: normalizeLanguage(profile?.language),
+    name: profile?.name || "",
+    age: profile?.age || "",
+    gender: profile?.gender || "",
+    chatbotName: profile?.chatbotName || "VRED",
+  };
+
+  const isIndonesian = safeProfile.language === "Bahasa Indonesia";
+  const chatbotName = safeProfile.chatbotName || "VRED";
+
+  const storageName = safeProfile.name || "anonymous";
+  const storageKey = `vred-chat-history-${storageName}`;
+  const moodStorageKey = `vred-selected-mood-${storageName}`;
+  const toneStorageKey = `vred-selected-tone-${storageName}`;
+
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [mode, setMode] = useState<"friendly" | "angry" | "professional">(
+    "friendly"
+  );
+  const [selectedMood, setSelectedMood] = useState<Mood | null>(null);
   const [loading, setLoading] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const [mode, setMode] = useState<
-    "friendly" | "angry" | "professional"
-  >("friendly");
+  const theme = getTheme(mode);
 
-  const [sessions, setSessions] = useState<Session[]>([
-    {
-      id: 1,
-      title: "Sesi baru",
-      messages: [
-        {
-          role: "assistant",
-          content:
-            "Haiii 👋 Ada apa nih yang lagi dipikirin? Cerita aja yaa 😊",
-        },
-      ],
-    },
-  ]);
-
-  const [activeSessionId, setActiveSessionId] =
-    useState(1);
-
-  const messagesEndRef =
-    useRef<HTMLDivElement | null>(null);
-
-  const activeSession =
-    sessions.find(
-      (s) => s.id === activeSessionId
-    ) || sessions[0];
-
-  // AUTO LOAD
   useEffect(() => {
+    const savedMessages = localStorage.getItem(storageKey);
+    const savedMood = localStorage.getItem(moodStorageKey);
+    const savedTone = localStorage.getItem(toneStorageKey);
 
-    const storedSessions =
-      loadSessions();
-
-    const storedMode =
-      loadMode();
-
-    if (storedSessions.length > 0) {
-
-      setSessions(storedSessions);
-
-      setActiveSessionId(
-        storedSessions[0].id
-      );
+    if (savedMessages) {
+      try {
+        const parsedMessages = JSON.parse(savedMessages);
+        if (Array.isArray(parsedMessages)) {
+          setMessages(parsedMessages);
+        }
+      } catch (error) {
+        console.error("Gagal membaca riwayat chat:", error);
+      }
     }
 
-    if (storedMode) {
-
-      setMode(storedMode as any);
+    if (savedMood) {
+      const mood = moods.find((item) => item.id === savedMood);
+      if (mood) {
+        setSelectedMood(mood);
+      }
     }
 
-  }, []);
+    if (
+      savedTone === "friendly" ||
+      savedTone === "angry" ||
+      savedTone === "professional"
+    ) {
+      setMode(savedTone);
+    }
+  }, [storageKey, moodStorageKey, toneStorageKey]);
 
-  // AUTO SAVE
   useEffect(() => {
-    saveSessions(sessions);
-  }, [sessions]);
+    localStorage.setItem(storageKey, JSON.stringify(messages));
+  }, [messages, storageKey]);
 
   useEffect(() => {
-    saveMode(mode);
-  }, [mode]);
+    if (selectedMood) {
+      localStorage.setItem(moodStorageKey, selectedMood.id);
+    }
+  }, [selectedMood, moodStorageKey]);
 
-  // AUTO SCROLL
   useEffect(() => {
+    localStorage.setItem(toneStorageKey, mode);
+  }, [mode, toneStorageKey]);
 
-    messagesEndRef.current?.scrollIntoView({
-      behavior: "smooth",
+  function getCurrentTime() {
+    return new Date().toLocaleTimeString(isIndonesian ? "id-ID" : "en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
     });
+  }
 
-  }, [activeSession.messages]);
+  function startNewChat() {
+    setMessages([]);
+    setSelectedMood(null);
+    setInput("");
+    setMenuOpen(false);
 
-  function createNewChat() {
+    localStorage.removeItem(storageKey);
+    localStorage.removeItem(moodStorageKey);
+  }
 
-    const newSession: Session = {
-      id: Date.now(),
-      title: "Sesi baru",
-      messages: [
-        {
-          role: "assistant",
-          content:
-            "Haiii ✨ Cerita aja yaa, aku siap nemenin kamu.",
-        },
-      ],
+  function clearSession() {
+    setMessages([]);
+    setInput("");
+    setMenuOpen(false);
+
+    localStorage.removeItem(storageKey);
+  }
+
+  function selectMood(mood: Mood) {
+    setSelectedMood(mood);
+
+    const greeting: Message = {
+      role: "assistant",
+      content: isIndonesian
+        ? `Hai ${safeProfile.name || "teman"}, aku ${chatbotName}. Aku lihat kamu sedang merasa ${mood.labelId}. Cerita pelan-pelan ya, aku dengerin.`
+        : `Hi ${safeProfile.name || "there"}, I'm ${chatbotName}. I see you're feeling ${mood.labelEn}. Take your time, I'm listening.`,
+      time: getCurrentTime(),
     };
 
-    setSessions((prev) => [
-      newSession,
-      ...prev,
-    ]);
-
-    setActiveSessionId(newSession.id);
+    setMessages([greeting]);
   }
 
   async function sendMessage() {
+    const currentMessage = input.trim();
 
-    if (!message.trim()) return;
+    if (!currentMessage || loading || !selectedMood) return;
 
     const userMessage: Message = {
       role: "user",
-      content: message,
+      content: currentMessage,
+      time: getCurrentTime(),
     };
 
-    const updatedMessages = [
-      ...activeSession.messages,
-      userMessage,
-    ];
+    const updatedMessages = [...messages, userMessage];
 
-    setSessions((prev) =>
-      prev.map((session) =>
-        session.id === activeSessionId
-          ? {
-              ...session,
-              messages: updatedMessages,
-              title:
-                session.title === "Sesi baru"
-                  ? message.slice(0, 20)
-                  : session.title,
-            }
-          : session
-      )
-    );
-
-    const currentMessage = message;
-
-    setMessage("");
-
+    setMessages(updatedMessages);
+    setInput("");
     setLoading(true);
 
     try {
-
-      const res = await fetch("/api/chat", {
+      const response = await fetch("/api/chat", {
         method: "POST",
-
         headers: {
-          "Content-Type":
-            "application/json",
+          "Content-Type": "application/json",
         },
-
         body: JSON.stringify({
           message: currentMessage,
           style: mode,
+          mood: selectedMood.id,
           history: updatedMessages,
+          language: safeProfile.language,
+          profile: safeProfile,
+          chatbotName,
         }),
       });
 
-      const data = await res.json();
+      const result = await response.json();
 
-      const aiMessage: Message = {
+      const botMessage: Message = {
         role: "assistant",
-        content: data.answer,
+        content:
+          result.answer ||
+          (isIndonesian
+            ? "Maaf, aku belum bisa menjawab saat ini."
+            : "Sorry, I can't answer right now."),
+        emotion: result.emotion,
+        riskLevel: result.riskLevel,
+        responseTime: result.responseTime,
+        time: getCurrentTime(),
       };
 
-      setSessions((prev) =>
-        prev.map((session) =>
-          session.id === activeSessionId
-            ? {
-                ...session,
-                messages: [
-                  ...updatedMessages,
-                  aiMessage,
-                ],
-              }
-            : session
-        )
-      );
+      setMessages((prev) => [...prev, botMessage]);
+    } catch (error) {
+      console.error("CHAT ERROR:", error);
 
-    } catch (err) {
-
-      console.error(err);
-
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: isIndonesian
+            ? "Maaf, terjadi kesalahan pada sistem. Coba lagi sebentar ya."
+            : "Sorry, something went wrong. Please try again in a moment.",
+          time: getCurrentTime(),
+        },
+      ]);
     } finally {
-
       setLoading(false);
     }
   }
 
-  const backgroundClass =
-    mode === "friendly"
-      ? "bg-gradient-to-br from-[#f8e8f8] to-[#efe9ff]"
-      : mode === "angry"
-      ? "bg-gradient-to-br from-[#ffe3e3] to-[#fff0f0]"
-      : "bg-gradient-to-br from-[#dff5e8] to-[#edfdf4]";
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      sendMessage();
+    }
+  }
+
+  function ToneButton({
+    value,
+    emoji,
+    label,
+  }: {
+    value: "friendly" | "angry" | "professional";
+    emoji: string;
+    label: string;
+  }) {
+    const active = mode === value;
+
+    return (
+      <button
+        type="button"
+        onClick={() => setMode(value)}
+        className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition"
+        style={{
+          background: active ? theme.primary : "rgba(255,255,255,0.65)",
+          color: active ? theme.userText : "#64748b",
+          boxShadow: active ? `0 8px 18px ${theme.primary}44` : "none",
+        }}
+      >
+        {emoji} {label}
+      </button>
+    );
+  }
 
   return (
-
     <div
-      className={`w-full min-h-screen overflow-hidden flex items-center justify-center p-3 transition-all duration-500 ${backgroundClass}`}
+      className="min-h-screen px-3 py-3 transition-all duration-500 sm:px-5 sm:py-5"
+      style={{ background: theme.pageBg }}
     >
-
       <div
-        className="
-        w-full
-        h-[96vh]
-        rounded-[26px]
-        overflow-hidden
-        bg-white/35
-        backdrop-blur-xl
-        border
-        border-white/40
-        shadow-2xl
-        flex
-      "
+        className="relative mx-auto flex h-[calc(100vh-24px)] max-w-5xl flex-col overflow-hidden rounded-[1.4rem] border border-white/70 backdrop-blur-xl sm:h-[calc(100vh-40px)] sm:rounded-[1.6rem]"
+        style={{
+          background: theme.mainBg,
+          boxShadow: theme.shadow,
+        }}
       >
-
-        {/* SIDEBAR */}
-        <div
-          className="
-          w-[240px]
-          bg-[#f7f2f7]
-          border-r
-          border-white/40
-          p-4
-          flex
-          flex-col
-          gap-4
-        "
-        >
-
-          {/* PROFILE */}
-          <div className="flex flex-col items-center text-center">
-
-            <div
-              className="
-              w-20
-              h-20
-              rounded-[24px]
-              bg-gradient-to-br
-              from-pink-500
-              to-purple-500
-              flex
-              items-center
-              justify-center
-              text-3xl
-              shadow-lg
-            "
+        <header className="flex h-14 items-center justify-between border-b border-white/60 px-4 sm:px-5">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setMenuOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/75 text-lg font-bold text-slate-600 shadow-sm"
             >
-              👱‍♀️
-            </div>
+              ☰
+            </button>
 
-            <h1 className="text-3xl font-bold mt-4 text-slate-900">
-              VRED
-            </h1>
-
-            <p className="text-slate-500 mt-1 text-sm">
-              Hadir nemeninmu 🌸
-            </p>
-
-          </div>
-
-          {/* HISTORY */}
-          <div
-            className="
-            bg-white/70
-            rounded-[22px]
-            p-4
-            shadow-sm
-            border
-            border-white/60
-            flex-1
-            overflow-y-auto
-          "
-          >
-
-            <div className="flex items-center justify-between mb-4">
-
-              <h2 className="text-slate-400 font-bold uppercase text-[11px]">
-                Riwayat Chat
-              </h2>
-
-              <button
-                onClick={createNewChat}
-                className="
-                px-3
-                py-1.5
-                rounded-full
-                bg-gradient-to-r
-                from-pink-500
-                to-purple-500
-                text-white
-                text-xs
-                font-semibold
-              "
+            <div>
+              <h1
+                className="text-lg font-black tracking-[0.16em] sm:text-xl"
+                style={{ color: theme.titleColor }}
               >
-                ✏️ Baru
-              </button>
+                VRED <span className="text-base">💗</span>
+              </h1>
 
+              <p className="text-[10px] font-medium text-slate-400 sm:text-xs">
+                {isIndonesian
+                  ? "Hadir menemanimu 🌸"
+                  : "Here whenever you need 💜"}
+              </p>
             </div>
+          </div>
 
-            <div className="space-y-2">
+          <div className="text-right text-[10px] text-slate-400 sm:text-xs">
+            <p className="font-bold text-slate-500">{chatbotName} online</p>
+            <p>
+              {getStyleLabel(mode, isIndonesian)}
+              {selectedMood
+                ? ` • ${selectedMood.emoji} ${
+                    isIndonesian ? selectedMood.labelId : selectedMood.labelEn
+                  }`
+                : ""}
+            </p>
+          </div>
+        </header>
 
-              {sessions.map((session) => (
+        {menuOpen && (
+          <div className="absolute inset-0 z-50 flex">
+            <button
+              type="button"
+              onClick={() => setMenuOpen(false)}
+              className="absolute inset-0 bg-slate-900/20 backdrop-blur-[2px]"
+            />
 
-                <button
-                  key={session.id}
-                  onClick={() =>
-                    setActiveSessionId(
-                      session.id
-                    )
-                  }
-                  className={`
-                  w-full
-                  text-left
-                  rounded-[18px]
-                  p-3
-                  transition
-                  border
-
-                  ${
-                    session.id ===
-                    activeSessionId
-                      ? "bg-gradient-to-r from-pink-500 to-purple-500 text-white border-transparent"
-                      : "bg-white text-slate-700 border-[#ececec]"
-                  }
-                `}
-                >
-
-                  <div className="font-medium truncate text-sm">
-                    💭 {session.title}
-                  </div>
-
-                  <div
-                    className={`
-                    text-[10px] mt-1
-                    ${
-                      session.id ===
-                      activeSessionId
-                        ? "text-white/70"
-                        : "text-slate-400"
-                    }
-                  `}
+            <aside className="relative z-10 h-full w-[84%] max-w-xs bg-white/90 px-5 py-5 shadow-2xl backdrop-blur-xl sm:w-80">
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h2
+                    className="text-2xl font-black tracking-[0.18em]"
+                    style={{ color: theme.titleColor }}
                   >
-                    4 Mei
-                  </div>
+                    VRED 💗
+                  </h2>
 
-                </button>
-
-              ))}
-
-            </div>
-
-          </div>
-
-          {/* MODE */}
-          <div
-            className="
-            bg-white/70
-            rounded-[22px]
-            p-4
-            border
-            border-white/60
-          "
-          >
-
-            <h2 className="text-slate-400 font-bold uppercase text-[11px] mb-3">
-              Gaya Bicara
-            </h2>
-
-            <div className="space-y-2">
-
-              {[
-                {
-                  key: "friendly",
-                  label: "😊 Santai",
-                },
-                {
-                  key: "angry",
-                  label: "😡 Marah",
-                },
-                {
-                  key: "professional",
-                  label: "🎓 Formal",
-                },
-              ].map((item) => (
-
-                <button
-                  key={item.key}
-                  onClick={() =>
-                    setMode(item.key as any)
-                  }
-                  className={`
-                  w-full
-                  p-3
-                  rounded-[16px]
-                  text-left
-                  transition
-                  text-sm
-                  font-semibold
-
-                  ${
-                    mode === item.key
-                      ? item.key ===
-                        "friendly"
-                        ? "bg-gradient-to-r from-pink-500 to-purple-500 text-white"
-                        : item.key ===
-                          "angry"
-                        ? "bg-gradient-to-r from-red-500 to-pink-500 text-white"
-                        : "bg-gradient-to-r from-emerald-500 to-green-500 text-white"
-                      : "bg-white text-slate-600"
-                  }
-                `}
-                >
-                  {item.label}
-                </button>
-
-              ))}
-
-            </div>
-
-          </div>
-
-        </div>
-
-        {/* CHAT AREA */}
-        <div className="flex-1 relative overflow-hidden">
-
-          {/* TOPBAR */}
-          <div className="h-20 px-6 flex items-center justify-between">
-
-            <div className="flex items-center gap-3">
-
-              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-
-              <span className="text-slate-500 text-base">
-                Online & siap dengerin
-              </span>
-
-            </div>
-
-          </div>
-
-          {/* CHAT */}
-          <div
-            className="
-            h-[calc(100%-140px)]
-            overflow-y-auto
-            px-6
-            pb-32
-          "
-          >
-
-            <div className="w-full max-w-[760px] mx-auto space-y-4">
-
-              {activeSession.messages.map(
-                (msg, index) => (
-
-                  <div
-                    key={index}
-                    className={`flex ${
-                      msg.role === "user"
-                        ? "justify-end"
-                        : "justify-start"
-                    }`}
-                  >
-
-                    <div
-                      className={`
-                      px-5
-                      py-4
-                      rounded-[24px]
-                      shadow-sm
-                      text-[15px]
-                      leading-relaxed
-                      max-w-[70%]
-
-                      ${
-                        msg.role ===
-                        "user"
-                          ? "bg-gradient-to-r from-pink-500 to-purple-500 text-white"
-                          : "bg-white text-slate-700 border border-[#ececec]"
-                      }
-                    `}
-                    >
-                      {msg.content}
-                    </div>
-
-                  </div>
-
-                )
-              )}
-
-              {loading && (
-
-                <div className="text-slate-400 text-sm">
-                  AI sedang mengetik...
+                  <p className="mt-1 text-xs text-slate-400">
+                    {isIndonesian ? "Menu pengaturan chat" : "Chat settings"}
+                  </p>
                 </div>
 
-              )}
+                <button
+                  type="button"
+                  onClick={() => setMenuOpen(false)}
+                  className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-bold text-slate-500"
+                >
+                  ✕
+                </button>
+              </div>
 
-              <div ref={messagesEndRef}></div>
+              <div className="mb-5 rounded-2xl bg-white/75 p-4 shadow-sm">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-[11px] font-extrabold uppercase tracking-wide text-slate-400">
+                    {isIndonesian ? "Riwayat Chat" : "Chat History"}
+                  </p>
 
-            </div>
+                  <button
+                    type="button"
+                    onClick={startNewChat}
+                    className="rounded-full px-3 py-1.5 text-[11px] font-bold text-white shadow-md"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, #f05abf 0%, #9b6df0 100%)",
+                    }}
+                  >
+                    ✎ {isIndonesian ? "Baru" : "New"}
+                  </button>
+                </div>
 
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-xl bg-white px-3 py-3 text-left shadow-sm transition hover:bg-slate-50"
+                >
+                  <span className="text-base text-pink-400">♡</span>
+
+                  <div>
+                    <p className="text-xs font-bold text-slate-700">
+                      {messages.length > 0
+                        ? isIndonesian
+                          ? "Sesi tersimpan"
+                          : "Saved session"
+                        : isIndonesian
+                        ? "Belum ada riwayat"
+                        : "No history yet"}
+                    </p>
+
+                    <p className="text-[10px] text-slate-300">
+                      {messages.length > 0
+                        ? `${messages.length} pesan`
+                        : isIndonesian
+                        ? "Mulai percakapan baru"
+                        : "Start a new conversation"}
+                    </p>
+                  </div>
+                </button>
+              </div>
+
+              <div className="mb-5 rounded-2xl bg-white/75 p-4 shadow-sm">
+                <p className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-slate-400">
+                  {isIndonesian ? "Nada Jawaban" : "Response Tone"}
+                </p>
+
+                <div className="space-y-2">
+                  <ToneButton
+                    value="friendly"
+                    emoji="😊"
+                    label={isIndonesian ? "Santai" : "Friendly"}
+                  />
+
+                  <ToneButton
+                    value="angry"
+                    emoji="😤"
+                    label={isIndonesian ? "Marah" : "Angry"}
+                  />
+
+                  <ToneButton
+                    value="professional"
+                    emoji="🎓"
+                    label={isIndonesian ? "Profesional" : "Professional"}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-white/75 p-4 shadow-sm">
+                <p className="mb-3 text-[11px] font-extrabold uppercase tracking-wide text-slate-400">
+                  {isIndonesian ? "Pengaturan Sesi" : "Session Settings"}
+                </p>
+
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={clearSession}
+                    className="flex w-full items-center gap-3 rounded-xl bg-white px-3 py-3 text-left text-xs font-bold text-slate-600 shadow-sm transition hover:bg-red-50 hover:text-red-600"
+                  >
+                    <span>🗑</span>
+                    <span>
+                      {isIndonesian ? "Hapus chat ini" : "Delete this chat"}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={startNewChat}
+                    className="flex w-full items-center gap-3 rounded-xl bg-white px-3 py-3 text-left text-xs font-bold text-slate-600 shadow-sm transition hover:bg-purple-50 hover:text-purple-600"
+                  >
+                    <span>↺</span>
+                    <span>
+                      {isIndonesian
+                        ? "Mulai ulang dari awal"
+                        : "Restart from start"}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </aside>
           </div>
+        )}
 
-          {/* INPUT */}
-          <div
-            className="
-            absolute
-            bottom-4
-            left-1/2
-            -translate-x-1/2
-            w-[92%]
-            max-w-[760px]
-          "
-          >
+        <section className="relative flex flex-1 flex-col px-4 py-4 sm:px-5 sm:py-5">
+          {!selectedMood && (
+            <div className="flex flex-1 items-center justify-center pb-24">
+              <div className="w-full max-w-md rounded-3xl border border-white/70 bg-white/85 p-5 text-center shadow-xl backdrop-blur sm:p-6">
+                <h2 className="text-base font-bold text-slate-700">
+                  {isIndonesian
+                    ? "Gimana perasaan kamu sekarang? 💭"
+                    : "How are you feeling right now? 💭"}
+                </h2>
 
-            <div
-              className="
-              bg-white
-              rounded-full
-              shadow-xl
-              p-3
-              flex
-              items-center
-              gap-3
-            "
-            >
+                <p className="mt-2 text-xs text-slate-400">
+                  {isIndonesian
+                    ? "Ceritain ke aku, kamu lagi..."
+                    : "Tell me, you're feeling..."}
+                </p>
 
+                <div className="mt-5 grid grid-cols-5 gap-2">
+                  {moods.map((mood) => (
+                    <button
+                      key={mood.id}
+                      type="button"
+                      onClick={() => selectMood(mood)}
+                      className="rounded-2xl border-2 border-white bg-white/95 px-2 py-3 text-slate-600 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+                    >
+                      <div className="text-xl sm:text-2xl">{mood.emoji}</div>
+                      <div className="mt-1 text-[10px] font-bold sm:text-[11px]">
+                        {isIndonesian ? mood.labelId : mood.labelEn}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selectedMood && (
+            <div className="flex flex-1 flex-col gap-3 overflow-y-auto pb-28 sm:pb-32">
+              {messages.map((msg, index) => (
+                <div
+                  key={index}
+                  className={`flex ${
+                    msg.role === "user" ? "justify-end" : "justify-start"
+                  }`}
+                >
+                  <div className="max-w-[82%] sm:max-w-[64%]">
+                    <div
+                      className="rounded-2xl px-4 py-3 text-xs leading-relaxed shadow-sm"
+                      style={{
+                        background:
+                          msg.role === "user" ? theme.userBubble : "#ffffff",
+                        color: msg.role === "user" ? theme.userText : "#334155",
+                        boxShadow: "0 8px 20px rgba(0,0,0,0.07)",
+                      }}
+                    >
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    </div>
+
+                    {msg.time && (
+                      <p
+                        className={`mt-1 text-[10px] text-slate-300 ${
+                          msg.role === "user" ? "text-right" : "text-left"
+                        }`}
+                      >
+                        {msg.time}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {loading && (
+                <div className="flex justify-start">
+                  <div className="rounded-2xl bg-white px-4 py-3 text-xs text-slate-400 shadow-sm">
+                    {isIndonesian
+                      ? `${chatbotName} sedang mengetik...`
+                      : `${chatbotName} is typing...`}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="absolute bottom-4 left-4 right-4 sm:bottom-5 sm:left-5 sm:right-5">
+            <div className="mx-auto flex max-w-3xl items-center gap-2 rounded-2xl bg-white/92 p-2.5 shadow-lg backdrop-blur">
               <input
-                value={message}
-                onChange={(e) =>
-                  setMessage(
-                    e.target.value
-                  )
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={!selectedMood || loading}
+                placeholder={
+                  !selectedMood
+                    ? isIndonesian
+                      ? "Pilih kondisi kamu dulu..."
+                      : "Choose your mood first..."
+                    : isIndonesian
+                    ? "Ketik pesanmu..."
+                    : "Type your message..."
                 }
-                onKeyDown={(e) =>
-                  e.key === "Enter" &&
-                  sendMessage()
-                }
-                placeholder="Ketik pesanmu..."
-                className="
-                flex-1
-                bg-transparent
-                outline-none
-                text-base
-                text-slate-700
-                placeholder:text-slate-400
-                px-3
-              "
+                className="flex-1 bg-transparent px-3 py-1.5 text-xs text-slate-700 outline-none placeholder:text-slate-300 disabled:cursor-not-allowed"
               />
 
               <button
+                type="button"
                 onClick={sendMessage}
-                className={`
-                w-14
-                h-14
-                rounded-full
-                text-white
-                text-xl
-                flex
-                items-center
-                justify-center
-                transition
-
-                ${
-                  mode === "friendly"
-                    ? "bg-gradient-to-r from-pink-500 to-purple-500"
-                    : mode === "angry"
-                    ? "bg-gradient-to-r from-red-500 to-pink-500"
-                    : "bg-gradient-to-r from-emerald-500 to-green-500"
-                }
-              `}
+                disabled={!selectedMood || loading || !input.trim()}
+                className="flex h-9 w-9 items-center justify-center rounded-xl text-base transition disabled:opacity-50"
+                style={{
+                  background: selectedMood ? theme.primarySoft : "#f1f5f9",
+                  color: selectedMood ? theme.primary : "#cbd5e1",
+                }}
               >
                 ➤
               </button>
-
             </div>
 
+            <div className="mt-2 flex flex-col items-center gap-1">
+              {selectedMood && (
+                <p className="text-center text-[11px] font-medium text-slate-400">
+                  {isIndonesian ? "Suasana hati:" : "Mood:"}{" "}
+                  <span
+                    className="font-semibold"
+                    style={{ color: theme.primary }}
+                  >
+                    {selectedMood.emoji}{" "}
+                    {isIndonesian ? selectedMood.labelId : selectedMood.labelEn}
+                  </span>
+                </p>
+              )}
+
+              <p className="text-center text-[10px] text-slate-300">
+                VRED bukan pengganti bantuan profesional.
+              </p>
+            </div>
           </div>
-
-        </div>
-
+        </section>
       </div>
-
     </div>
   );
 }

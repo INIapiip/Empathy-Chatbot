@@ -30,6 +30,18 @@ type Mood = {
   emoji: string;
 };
 
+type Tone = "friendly" | "angry" | "professional";
+
+type ChatSession = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: Message[];
+  moodId: string | null;
+  tone: Tone;
+};
+
 const moods: Mood[] = [
   { id: "good", labelId: "Baik", labelEn: "Good", emoji: "😊" },
   { id: "sad", labelId: "Sedih", labelEn: "Sad", emoji: "😔" },
@@ -110,6 +122,20 @@ function getTheme(style: string) {
   };
 }
 
+function createSession(): ChatSession {
+  const now = new Date().toISOString();
+
+  return {
+    id: `session-${Date.now()}`,
+    title: "Sesi baru",
+    createdAt: now,
+    updatedAt: now,
+    messages: [],
+    moodId: null,
+    tone: "friendly",
+  };
+}
+
 export default function ChatLayout({ profile }: ChatLayoutProps) {
   const safeProfile: UserProfile = {
     language: normalizeLanguage(profile?.language),
@@ -121,17 +147,16 @@ export default function ChatLayout({ profile }: ChatLayoutProps) {
 
   const isIndonesian = safeProfile.language === "Bahasa Indonesia";
   const chatbotName = safeProfile.chatbotName || "VRED";
-
   const storageName = safeProfile.name || "anonymous";
-  const storageKey = `vred-chat-history-${storageName}`;
-  const moodStorageKey = `vred-selected-mood-${storageName}`;
-  const toneStorageKey = `vred-selected-tone-${storageName}`;
 
+  const sessionsKey = `vred-chat-sessions-${storageName}`;
+  const activeSessionKey = `vred-active-session-${storageName}`;
+
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [mode, setMode] = useState<"friendly" | "angry" | "professional">(
-    "friendly"
-  );
+  const [mode, setMode] = useState<Tone>("friendly");
   const [selectedMood, setSelectedMood] = useState<Mood | null>(null);
   const [loading, setLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -139,50 +164,63 @@ export default function ChatLayout({ profile }: ChatLayoutProps) {
   const theme = getTheme(mode);
 
   useEffect(() => {
-    const savedMessages = localStorage.getItem(storageKey);
-    const savedMood = localStorage.getItem(moodStorageKey);
-    const savedTone = localStorage.getItem(toneStorageKey);
+    const savedSessions = localStorage.getItem(sessionsKey);
+    const savedActiveId = localStorage.getItem(activeSessionKey);
 
-    if (savedMessages) {
+    if (savedSessions) {
       try {
-        const parsedMessages = JSON.parse(savedMessages);
-        if (Array.isArray(parsedMessages)) {
-          setMessages(parsedMessages);
+        const parsedSessions = JSON.parse(savedSessions) as ChatSession[];
+
+        if (Array.isArray(parsedSessions) && parsedSessions.length > 0) {
+          setSessions(parsedSessions);
+
+          const targetSession =
+            parsedSessions.find((session) => session.id === savedActiveId) ||
+            parsedSessions[0];
+
+          setActiveSessionId(targetSession.id);
+          setMessages(targetSession.messages || []);
+          setMode(targetSession.tone || "friendly");
+
+          const mood = moods.find((item) => item.id === targetSession.moodId);
+          setSelectedMood(mood || null);
         }
       } catch (error) {
         console.error("Gagal membaca riwayat chat:", error);
       }
     }
+  }, [sessionsKey, activeSessionKey]);
 
-    if (savedMood) {
-      const mood = moods.find((item) => item.id === savedMood);
-      if (mood) {
-        setSelectedMood(mood);
-      }
+  function saveSessions(nextSessions: ChatSession[]) {
+    setSessions(nextSessions);
+    localStorage.setItem(sessionsKey, JSON.stringify(nextSessions));
+  }
+
+  function saveActiveSessionId(sessionId: string | null) {
+    setActiveSessionId(sessionId);
+
+    if (sessionId) {
+      localStorage.setItem(activeSessionKey, sessionId);
+    } else {
+      localStorage.removeItem(activeSessionKey);
     }
+  }
 
-    if (
-      savedTone === "friendly" ||
-      savedTone === "angry" ||
-      savedTone === "professional"
-    ) {
-      setMode(savedTone);
-    }
-  }, [storageKey, moodStorageKey, toneStorageKey]);
+  function updateActiveSession(data: Partial<ChatSession>) {
+    if (!activeSessionId) return;
 
-  useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(messages));
-  }, [messages, storageKey]);
+    const nextSessions = sessions.map((session) => {
+      if (session.id !== activeSessionId) return session;
 
-  useEffect(() => {
-    if (selectedMood) {
-      localStorage.setItem(moodStorageKey, selectedMood.id);
-    }
-  }, [selectedMood, moodStorageKey]);
+      return {
+        ...session,
+        ...data,
+        updatedAt: new Date().toISOString(),
+      };
+    });
 
-  useEffect(() => {
-    localStorage.setItem(toneStorageKey, mode);
-  }, [mode, toneStorageKey]);
+    saveSessions(nextSessions);
+  }
 
   function getCurrentTime() {
     return new Date().toLocaleTimeString(isIndonesian ? "id-ID" : "en-US", {
@@ -191,26 +229,96 @@ export default function ChatLayout({ profile }: ChatLayoutProps) {
     });
   }
 
+  function formatLastUsed(dateString: string) {
+    return new Date(dateString).toLocaleString(isIndonesian ? "id-ID" : "en-US", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
   function startNewChat() {
+    const newSession = createSession();
+    const nextSessions = [newSession, ...sessions];
+
+    saveSessions(nextSessions);
+    saveActiveSessionId(newSession.id);
+
+    setMessages([]);
+    setSelectedMood(null);
+    setMode("friendly");
+    setInput("");
+    setMenuOpen(false);
+  }
+
+  function openSession(sessionId: string) {
+    const session = sessions.find((item) => item.id === sessionId);
+
+    if (!session) return;
+
+    saveActiveSessionId(session.id);
+    setMessages(session.messages || []);
+    setMode(session.tone || "friendly");
+
+    const mood = moods.find((item) => item.id === session.moodId);
+    setSelectedMood(mood || null);
+
+    setInput("");
+    setMenuOpen(false);
+  }
+
+  function clearSession() {
+    if (!activeSessionId) {
+      setMessages([]);
+      setInput("");
+      setMenuOpen(false);
+      return;
+    }
+
+    const nextSessions = sessions.map((session) => {
+      if (session.id !== activeSessionId) return session;
+
+      return {
+        ...session,
+        title: "Sesi baru",
+        messages: [],
+        moodId: null,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    saveSessions(nextSessions);
     setMessages([]);
     setSelectedMood(null);
     setInput("");
     setMenuOpen(false);
-
-    localStorage.removeItem(storageKey);
-    localStorage.removeItem(moodStorageKey);
   }
 
-  function clearSession() {
+  function resetAllSessions() {
+    localStorage.removeItem(sessionsKey);
+    localStorage.removeItem(activeSessionKey);
+
+    setSessions([]);
+    setActiveSessionId(null);
     setMessages([]);
+    setSelectedMood(null);
+    setMode("friendly");
     setInput("");
     setMenuOpen(false);
-
-    localStorage.removeItem(storageKey);
   }
 
   function selectMood(mood: Mood) {
-    setSelectedMood(mood);
+    let currentSessionId = activeSessionId;
+    let nextSessions = [...sessions];
+
+    if (!currentSessionId) {
+      const newSession = createSession();
+      currentSessionId = newSession.id;
+      nextSessions = [newSession, ...nextSessions];
+      saveActiveSessionId(newSession.id);
+    }
 
     const greeting: Message = {
       role: "assistant",
@@ -220,6 +328,23 @@ export default function ChatLayout({ profile }: ChatLayoutProps) {
       time: getCurrentTime(),
     };
 
+    const updatedSessions = nextSessions.map((session) => {
+      if (session.id !== currentSessionId) return session;
+
+      return {
+        ...session,
+        title: isIndonesian
+          ? `Sesi ${mood.labelId}`
+          : `${mood.labelEn} session`,
+        messages: [greeting],
+        moodId: mood.id,
+        tone: mode,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    saveSessions(updatedSessions);
+    setSelectedMood(mood);
     setMessages([greeting]);
   }
 
@@ -227,6 +352,16 @@ export default function ChatLayout({ profile }: ChatLayoutProps) {
     const currentMessage = input.trim();
 
     if (!currentMessage || loading || !selectedMood) return;
+
+    let currentSessionId = activeSessionId;
+    let nextSessions = [...sessions];
+
+    if (!currentSessionId) {
+      const newSession = createSession();
+      currentSessionId = newSession.id;
+      nextSessions = [newSession, ...nextSessions];
+      saveActiveSessionId(newSession.id);
+    }
 
     const userMessage: Message = {
       role: "user",
@@ -239,6 +374,31 @@ export default function ChatLayout({ profile }: ChatLayoutProps) {
     setMessages(updatedMessages);
     setInput("");
     setLoading(true);
+
+    const titleFromMessage =
+      currentMessage.length > 24
+        ? `${currentMessage.slice(0, 24)}...`
+        : currentMessage;
+
+    saveSessions(
+      nextSessions.map((session) => {
+        if (session.id !== currentSessionId) return session;
+
+        return {
+          ...session,
+          title:
+            session.title === "Sesi baru" ||
+            session.title.startsWith("Sesi ") ||
+            session.title.endsWith("session")
+              ? titleFromMessage
+              : session.title,
+          messages: updatedMessages,
+          moodId: selectedMood.id,
+          tone: mode,
+          updatedAt: new Date().toISOString(),
+        };
+      })
+    );
 
     try {
       const response = await fetch("/api/chat", {
@@ -272,20 +432,49 @@ export default function ChatLayout({ profile }: ChatLayoutProps) {
         time: getCurrentTime(),
       };
 
-      setMessages((prev) => [...prev, botMessage]);
+      const finalMessages = [...updatedMessages, botMessage];
+
+      setMessages(finalMessages);
+
+      saveSessions(
+        nextSessions.map((session) => {
+          if (session.id !== currentSessionId) return session;
+
+          return {
+            ...session,
+            title:
+              session.title === "Sesi baru" ||
+              session.title.startsWith("Sesi ") ||
+              session.title.endsWith("session")
+                ? titleFromMessage
+                : session.title,
+            messages: finalMessages,
+            moodId: selectedMood.id,
+            tone: mode,
+            updatedAt: new Date().toISOString(),
+          };
+        })
+      );
     } catch (error) {
       console.error("CHAT ERROR:", error);
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: isIndonesian
-            ? "Maaf, terjadi kesalahan pada sistem. Coba lagi sebentar ya."
-            : "Sorry, something went wrong. Please try again in a moment.",
-          time: getCurrentTime(),
-        },
-      ]);
+      const errorMessage: Message = {
+        role: "assistant",
+        content: isIndonesian
+          ? "Maaf, terjadi kesalahan pada sistem. Coba lagi sebentar ya."
+          : "Sorry, something went wrong. Please try again in a moment.",
+        time: getCurrentTime(),
+      };
+
+      const finalMessages = [...updatedMessages, errorMessage];
+
+      setMessages(finalMessages);
+
+      updateActiveSession({
+        messages: finalMessages,
+        moodId: selectedMood.id,
+        tone: mode,
+      });
     } finally {
       setLoading(false);
     }
@@ -297,12 +486,17 @@ export default function ChatLayout({ profile }: ChatLayoutProps) {
     }
   }
 
+  function changeTone(value: Tone) {
+    setMode(value);
+    updateActiveSession({ tone: value });
+  }
+
   function ToneButton({
     value,
     emoji,
     label,
   }: {
-    value: "friendly" | "angry" | "professional";
+    value: Tone;
     emoji: string;
     label: string;
   }) {
@@ -311,7 +505,7 @@ export default function ChatLayout({ profile }: ChatLayoutProps) {
     return (
       <button
         type="button"
-        onClick={() => setMode(value)}
+        onClick={() => changeTone(value)}
         className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition"
         style={{
           background: active ? theme.primary : "rgba(255,255,255,0.65)",
@@ -383,7 +577,7 @@ export default function ChatLayout({ profile }: ChatLayoutProps) {
               className="absolute inset-0 bg-slate-900/20 backdrop-blur-[2px]"
             />
 
-            <aside className="relative z-10 h-full w-[84%] max-w-xs bg-white/90 px-5 py-5 shadow-2xl backdrop-blur-xl sm:w-80">
+            <aside className="relative z-10 h-full w-[84%] max-w-xs overflow-y-auto bg-white/90 px-5 py-5 shadow-2xl backdrop-blur-xl sm:w-80">
               <div className="mb-6 flex items-center justify-between">
                 <div>
                   <h2
@@ -426,32 +620,50 @@ export default function ChatLayout({ profile }: ChatLayoutProps) {
                   </button>
                 </div>
 
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-3 rounded-xl bg-white px-3 py-3 text-left shadow-sm transition hover:bg-slate-50"
-                >
-                  <span className="text-base text-pink-400">♡</span>
-
-                  <div>
-                    <p className="text-xs font-bold text-slate-700">
-                      {messages.length > 0
-                        ? isIndonesian
-                          ? "Sesi tersimpan"
-                          : "Saved session"
-                        : isIndonesian
+                <div className="max-h-52 space-y-2 overflow-y-auto pr-2">
+                  {sessions.length === 0 && (
+                    <div className="rounded-xl bg-white px-3 py-3 text-xs font-bold text-slate-400 shadow-sm">
+                      {isIndonesian
                         ? "Belum ada riwayat"
                         : "No history yet"}
-                    </p>
+                    </div>
+                  )}
 
-                    <p className="text-[10px] text-slate-300">
-                      {messages.length > 0
-                        ? `${messages.length} pesan`
-                        : isIndonesian
-                        ? "Mulai percakapan baru"
-                        : "Start a new conversation"}
-                    </p>
-                  </div>
-                </button>
+                  {sessions.map((session) => {
+                    const mood = moods.find((item) => item.id === session.moodId);
+                    const isActive = session.id === activeSessionId;
+
+                    return (
+                      <button
+                        key={session.id}
+                        type="button"
+                        onClick={() => openSession(session.id)}
+                        className="flex w-[calc(100%-4px)] items-center gap-2 rounded-xl bg-white px-3 py-2.5 text-left shadow-sm transition hover:bg-slate-50 active:scale-[0.98]"
+                        style={{
+                          outline: isActive
+                            ? `2px solid ${theme.primary}`
+                            : "none",
+                          outlineOffset: "-1px",
+                          marginRight: "4px",
+                        }}
+                      >
+                        <span className="shrink-0 text-base text-pink-400">
+                          {mood ? mood.emoji : "♡"}
+                        </span>
+
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-bold text-slate-700">
+                            {session.title || "Sesi baru"}
+                          </p>
+
+                          <p className="truncate text-[10px] text-slate-300">
+                            Terakhir dipakai: {formatLastUsed(session.updatedAt)}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="mb-5 rounded-2xl bg-white/75 p-4 shadow-sm">
@@ -499,7 +711,7 @@ export default function ChatLayout({ profile }: ChatLayoutProps) {
 
                   <button
                     type="button"
-                    onClick={startNewChat}
+                    onClick={resetAllSessions}
                     className="flex w-full items-center gap-3 rounded-xl bg-white px-3 py-3 text-left text-xs font-bold text-slate-600 shadow-sm transition hover:bg-purple-50 hover:text-purple-600"
                   >
                     <span>↺</span>

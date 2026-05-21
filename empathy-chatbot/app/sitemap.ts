@@ -1,13 +1,14 @@
 import type { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = "https://domain-kamu.com";
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || "https://vredai.pages.dev";
 
   return [
     {
       url: baseUrl,
       lastModified: new Date(),
-      changeFrequency: "monthly",
+      changeFrequency: "weekly",
       priority: 1,
     },
   ];

@@ -38,12 +38,6 @@ export default function LandingPage({ onStart }: Props) {
         >
           🌸
         </motion.div>
-        <h1>VRED - Empathy Chatbot untuk Teman Cerita Online</h1>
-        <p>
-          VRED adalah chatbot empatik berbasis Large Language Model yang membantu 
-          pengguna bercerita secara anonim, memilih suasana hati, dan mendapatkan
-          respons sesuai nada jawaban yang dipilih.
-        </p>
 
         {/* TITLE */}
         <h1 className="text-5xl md:text-7xl font-bold text-gray-800 leading-tight">

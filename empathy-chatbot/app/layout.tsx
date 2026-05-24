@@ -16,6 +16,11 @@ export const metadata: Metadata = {
     "chatbot curhat",
   ],
   authors: [{ name: "VRED" }],
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
+  },
   openGraph: {
     title: "VRED - Empathy Chatbot",
     description:
@@ -23,6 +28,14 @@ export const metadata: Metadata = {
     type: "website",
     locale: "id_ID",
     siteName: "VRED",
+    images: [
+      {
+        url: "/icon.png",
+        width: 512,
+        height: 512,
+        alt: "VRED Logo",
+      },
+    ],
   },
 };
 

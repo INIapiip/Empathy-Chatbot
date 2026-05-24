@@ -19,13 +19,12 @@ export const metadata: Metadata = {
   icons: {
   icon: [
     {
-      url: "/icon.png?v=3",
+      url: "/icon.png?v=99",
       type: "image/png",
-      sizes: "any",
     },
   ],
-  shortcut: "/icon.png?v=3",
-  apple: "/icon.png?v=3",
+  shortcut: "/icon.png?v=99",
+  apple: "/icon.png?v=99",
 },
   openGraph: {
     title: "VRED - Empathy Chatbot",

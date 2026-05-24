@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type UserProfile = {
   language?: string;
@@ -161,6 +161,8 @@ export default function ChatLayout({ profile }: ChatLayoutProps) {
   const [loading, setLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
   const theme = getTheme(mode);
 
   useEffect(() => {
@@ -190,6 +192,15 @@ export default function ChatLayout({ profile }: ChatLayoutProps) {
       }
     }
   }, [sessionsKey, activeSessionKey]);
+
+  useEffect(() => {
+    if (!selectedMood) return;
+
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
+  }, [messages, loading, selectedMood]);
 
   function saveSessions(nextSessions: ChatSession[]) {
     setSessions(nextSessions);
@@ -482,6 +493,7 @@ export default function ChatLayout({ profile }: ChatLayoutProps) {
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") {
+      e.preventDefault();
       sendMessage();
     }
   }
@@ -520,17 +532,17 @@ export default function ChatLayout({ profile }: ChatLayoutProps) {
 
   return (
     <div
-      className="min-h-screen px-3 py-3 transition-all duration-500 sm:px-5 sm:py-5"
+      className="h-[100dvh] overflow-hidden px-3 py-3 transition-all duration-500 sm:px-5 sm:py-5"
       style={{ background: theme.pageBg }}
     >
       <div
-        className="relative mx-auto flex h-[calc(100vh-24px)] max-w-5xl flex-col overflow-hidden rounded-[1.4rem] border border-white/70 backdrop-blur-xl sm:h-[calc(100vh-40px)] sm:rounded-[1.6rem]"
+        className="relative mx-auto flex h-full max-w-5xl flex-col overflow-hidden rounded-[1.4rem] border border-white/70 backdrop-blur-xl sm:rounded-[1.6rem]"
         style={{
           background: theme.mainBg,
           boxShadow: theme.shadow,
         }}
       >
-        <header className="flex h-14 items-center justify-between border-b border-white/60 px-4 sm:px-5">
+        <header className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-white/60 px-4 sm:px-5">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -727,9 +739,9 @@ export default function ChatLayout({ profile }: ChatLayoutProps) {
           </div>
         )}
 
-        <section className="relative flex flex-1 flex-col px-4 py-4 sm:px-5 sm:py-5">
+        <section className="flex min-h-0 flex-1 flex-col px-4 py-4 sm:px-5 sm:py-5">
           {!selectedMood && (
-            <div className="flex flex-1 items-center justify-center pb-24">
+            <div className="flex min-h-0 flex-1 items-center justify-center">
               <div className="w-full max-w-md rounded-3xl border border-white/70 bg-white/85 p-5 text-center shadow-xl backdrop-blur sm:p-6">
                 <h2 className="text-base font-bold text-slate-700">
                   {isIndonesian
@@ -763,53 +775,58 @@ export default function ChatLayout({ profile }: ChatLayoutProps) {
           )}
 
           {selectedMood && (
-            <div className="flex flex-1 flex-col gap-3 overflow-y-auto pb-28 sm:pb-32">
-              {messages.map((msg, index) => (
-                <div
-                  key={index}
-                  className={`flex ${
-                    msg.role === "user" ? "justify-end" : "justify-start"
-                  }`}
-                >
-                  <div className="max-w-[82%] sm:max-w-[64%]">
-                    <div
-                      className="rounded-2xl px-4 py-3 text-xs leading-relaxed shadow-sm"
-                      style={{
-                        background:
-                          msg.role === "user" ? theme.userBubble : "#ffffff",
-                        color: msg.role === "user" ? theme.userText : "#334155",
-                        boxShadow: "0 8px 20px rgba(0,0,0,0.07)",
-                      }}
-                    >
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
-                    </div>
-
-                    {msg.time && (
-                      <p
-                        className={`mt-1 text-[10px] text-slate-300 ${
-                          msg.role === "user" ? "text-right" : "text-left"
-                        }`}
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <div className="flex flex-col gap-3 pb-3">
+                {messages.map((msg, index) => (
+                  <div
+                    key={index}
+                    className={`flex ${
+                      msg.role === "user" ? "justify-end" : "justify-start"
+                    }`}
+                  >
+                    <div className="max-w-[82%] sm:max-w-[64%]">
+                      <div
+                        className="rounded-2xl px-4 py-3 text-xs leading-relaxed shadow-sm sm:text-sm"
+                        style={{
+                          background:
+                            msg.role === "user" ? theme.userBubble : "#ffffff",
+                          color:
+                            msg.role === "user" ? theme.userText : "#334155",
+                          boxShadow: "0 8px 20px rgba(0,0,0,0.07)",
+                        }}
                       >
-                        {msg.time}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                      </div>
 
-              {loading && (
-                <div className="flex justify-start">
-                  <div className="rounded-2xl bg-white px-4 py-3 text-xs text-slate-400 shadow-sm">
-                    {isIndonesian
-                      ? `${chatbotName} sedang mengetik...`
-                      : `${chatbotName} is typing...`}
+                      {msg.time && (
+                        <p
+                          className={`mt-1 text-[10px] text-slate-300 ${
+                            msg.role === "user" ? "text-right" : "text-left"
+                          }`}
+                        >
+                          {msg.time}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                ))}
+
+                {loading && (
+                  <div className="flex justify-start">
+                    <div className="rounded-2xl bg-white px-4 py-3 text-xs text-slate-400 shadow-sm sm:text-sm">
+                      {isIndonesian
+                        ? `${chatbotName} sedang mengetik...`
+                        : `${chatbotName} is typing...`}
+                    </div>
+                  </div>
+                )}
+
+                <div ref={messagesEndRef} />
+              </div>
             </div>
           )}
 
-          <div className="absolute bottom-4 left-4 right-4 sm:bottom-5 sm:left-5 sm:right-5">
+          <div className="shrink-0 pt-3">
             <div className="mx-auto flex max-w-3xl items-center gap-2 rounded-2xl bg-white/92 p-2.5 shadow-lg backdrop-blur">
               <input
                 value={input}
@@ -825,14 +842,14 @@ export default function ChatLayout({ profile }: ChatLayoutProps) {
                     ? "Ketik pesanmu..."
                     : "Type your message..."
                 }
-                className="flex-1 bg-transparent px-3 py-1.5 text-xs text-slate-700 outline-none placeholder:text-slate-300 disabled:cursor-not-allowed"
+                className="min-w-0 flex-1 bg-transparent px-3 py-1.5 text-xs text-slate-700 outline-none placeholder:text-slate-300 disabled:cursor-not-allowed sm:text-sm"
               />
 
               <button
                 type="button"
                 onClick={sendMessage}
                 disabled={!selectedMood || loading || !input.trim()}
-                className="flex h-9 w-9 items-center justify-center rounded-xl text-base transition disabled:opacity-50"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base transition disabled:opacity-50"
                 style={{
                   background: selectedMood ? theme.primarySoft : "#f1f5f9",
                   color: selectedMood ? theme.primary : "#cbd5e1",

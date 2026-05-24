@@ -1,30 +1,75 @@
-import fs from "fs";
-import path from "path";
+type LogChatParams = {
+  profile?: {
+    name?: string;
+    age?: string;
+    gender?: string;
+    language?: string;
+    chatbotName?: string;
+  };
+  message: string;
+  response: string;
+  riskLevel?: string;
+  safetyCategory?: string;
+  matchedKeyword?: string;
+  tone?: string;
+  style?: string;
+  mood?: string;
+  language?: string;
+  responseTime?: number;
+};
 
-export function logLatency(data: any) {
+export async function logChatToSheet({
+  profile,
+  message,
+  response,
+  riskLevel = "LOW",
+  safetyCategory = "normal conversation",
+  matchedKeyword = "",
+  tone,
+  style,
+  mood = "",
+  language,
+  responseTime = 0,
+}: LogChatParams) {
+  const webhookUrl = process.env.GOOGLE_SHEET_WEBHOOK_URL;
 
-  const filePath = path.join(
-    process.cwd(),
-    "latency_logs.csv"
-  );
-
-  const row =
-`${new Date().toISOString()},
-"${data.message}",
-${data.riskLevel},
-${data.latency}
-\n`;
-
-  if (!fs.existsSync(filePath)) {
-
-    fs.writeFileSync(
-      filePath,
-      "timestamp,message,risk,latency\n"
-    );
+  if (!webhookUrl) {
+    console.warn("GOOGLE_SHEET_WEBHOOK_URL belum dikonfigurasi.");
+    return;
   }
 
-  fs.appendFileSync(
-    filePath,
-    row
-  );
+  const name = profile?.name?.trim() || "unknown_user";
+  const age = profile?.age?.trim() || "";
+  const finalLanguage = language || profile?.language || "";
+  const finalTone = tone || style || "";
+
+  try {
+    await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify({
+        timestamp: new Date().toISOString(),
+        name,
+        userName: name,
+        age,
+        gender: profile?.gender || "",
+        chatbotName: profile?.chatbotName || "",
+        message,
+        response,
+        answer: response,
+        riskLevel,
+        safetyCategory,
+        matchedKeyword,
+        tone: finalTone,
+        style: finalTone,
+        mood,
+        language: finalLanguage,
+        responseTime,
+      }),
+    });
+  } catch (error) {
+    console.error("Gagal mencatat log ke Google Spreadsheet:", error);
+  }
 }

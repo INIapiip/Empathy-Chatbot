@@ -5,6 +5,7 @@ import { retrieveContext } from "../../../lib/rag";
 import { generateResponse } from "../../../lib/llm";
 import { detectSafety, buildSafetyResponse } from "@/lib/safety";
 import { normalizeLanguage } from "@/lib/language";
+import { logChatToSheet } from "@/lib/logger";
 
 type ChatMessage = {
   role: "user" | "assistant" | "system";
@@ -18,38 +19,6 @@ type UserProfile = {
   gender?: string;
   chatbotName?: string;
 };
-
-async function sendLatencyLog(data: {
-  timestamp: string;
-  message: string;
-  response: string;
-  riskLevel: string;
-  safetyCategory: string;
-  matchedKeyword: string;
-  tone: string;
-  mood: string;
-  language: string;
-  responseTime: number;
-}) {
-  const webhookUrl = process.env.GOOGLE_SHEET_WEBHOOK_URL;
-
-  if (!webhookUrl) {
-    console.warn("GOOGLE_SHEET_WEBHOOK_URL belum diatur di .env.local");
-    return;
-  }
-
-  try {
-    await fetch(webhookUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(data),
-    });
-  } catch (error) {
-    console.error("Gagal mengirim log latency ke Google Sheets:", error);
-  }
-}
 
 export async function POST(req: Request) {
   const start = performance.now();
@@ -87,14 +56,15 @@ export async function POST(req: Request) {
       const safeAnswer = buildSafetyResponse(riskLevel, language);
       const responseTime = performance.now() - start;
 
-      await sendLatencyLog({
-        timestamp: new Date().toISOString(),
+      await logChatToSheet({
+        profile,
         message,
         response: safeAnswer,
         riskLevel,
         safetyCategory: safety.category,
         matchedKeyword: safety.matchedKeyword || "",
         tone: style,
+        style,
         mood,
         language,
         responseTime,
@@ -129,14 +99,15 @@ export async function POST(req: Request) {
     const answer = await generateResponse(prompt, language);
     const responseTime = performance.now() - start;
 
-    await sendLatencyLog({
-      timestamp: new Date().toISOString(),
+    await logChatToSheet({
+      profile,
       message,
       response: answer,
       riskLevel,
       safetyCategory: safety.category,
       matchedKeyword: safety.matchedKeyword || "",
       tone: style,
+      style,
       mood,
       language,
       responseTime,

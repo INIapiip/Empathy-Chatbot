@@ -17,10 +17,16 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "VRED" }],
   icons: {
-    icon: "/icon.png",
-    shortcut: "/icon.png",
-    apple: "/icon.png",
-  },
+  icon: [
+    {
+      url: "/icon.png?v=3",
+      type: "image/png",
+      sizes: "any",
+    },
+  ],
+  shortcut: "/icon.png?v=3",
+  apple: "/icon.png?v=3",
+},
   openGraph: {
     title: "VRED - Empathy Chatbot",
     description:

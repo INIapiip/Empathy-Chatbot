@@ -17,12 +17,19 @@ export default function LandingPage({ onStart }: LandingPageProps) {
           className="mx-auto flex w-full max-w-2xl flex-col items-center text-center"
         >
           <motion.div
-            initial={{ scale: 0.85, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.7, delay: 0.1, ease: "easeOut" }}
-            className="mb-10 text-6xl"
+            animate={{
+              y: [0, -10, 0],
+              rotate: [0, 6, -6, 0],
+              scale: [1, 1.08, 1],
+            }}
+            transition={{
+              duration: 3,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+            className="mb-10 text-6xl drop-shadow-sm"
           >
-            🌺
+            🌸
           </motion.div>
 
           <motion.h1
@@ -57,13 +64,35 @@ export default function LandingPage({ onStart }: LandingPageProps) {
             type="button"
             onClick={onStart}
             initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            whileHover={{ scale: 1.04 }}
+            animate={{
+              opacity: 1,
+              y: 0,
+              scale: [1, 1.04, 1],
+              boxShadow: [
+                "0 10px 25px rgba(15, 23, 42, 0.14)",
+                "0 16px 35px rgba(236, 72, 153, 0.28)",
+                "0 10px 25px rgba(15, 23, 42, 0.14)",
+              ],
+            }}
+            whileHover={{ scale: 1.06 }}
             whileTap={{ scale: 0.97 }}
-            transition={{ duration: 0.7, delay: 0.5 }}
-            className="mt-4 rounded-xl bg-white px-8 py-3 text-sm font-bold text-slate-800 shadow-lg transition hover:shadow-xl"
+            transition={{
+              opacity: { duration: 0.7, delay: 0.5 },
+              y: { duration: 0.7, delay: 0.5 },
+              scale: {
+                duration: 1.8,
+                repeat: Infinity,
+                ease: "easeInOut",
+              },
+              boxShadow: {
+                duration: 1.8,
+                repeat: Infinity,
+                ease: "easeInOut",
+              },
+            }}
+            className="mt-4 rounded-xl bg-white px-8 py-3 text-sm font-bold text-slate-800 transition"
           >
-            Start Chatting ✨
+            One tap to start ✨
           </motion.button>
         </motion.div>
       </section>

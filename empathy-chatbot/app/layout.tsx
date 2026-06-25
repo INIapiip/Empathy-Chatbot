@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   },
 
   description:
-    "VRED merupakan chatbot empatik berbasis Retrieval-Augmented Generation (RAG) dan Large Language Model (LLM) yang membantu pengguna berdiskusi secara anonim dengan respons yang relevan, empatik, dan natural.",
+    "VRED merupakan chatbot empatik berbasis Retrieval-Augmented Generation (RAG) dan Large Language Model (LLM) yang membantu pengguna berdiskusi secara anonim dengan respons yang relevan dan empatik.",
 
   keywords: [
     "VRED",
@@ -29,14 +29,14 @@ export const metadata: Metadata = {
     "Mental Health Chatbot",
     "Chatbot Indonesia",
   ],
-// SEO UPDATE
+
   authors: [
     {
-      name: "Nama Kamu",
+      name: "Afif Putra",
     },
   ],
 
-  creator: "Nama Kamu",
+  creator: "Afif Putra",
 
   publisher: "VRED",
 
@@ -46,25 +46,21 @@ export const metadata: Metadata = {
     googleBot: {
       index: true,
       follow: true,
-      "max-video-preview": -1,
       "max-image-preview": "large",
       "max-snippet": -1,
+      "max-video-preview": -1,
     },
   },
 
   icons: {
-    icon: [
-      {
-        url: "/icon.png",
-        type: "image/png",
-      },
-    ],
+    icon: "/icon.png",
     shortcut: "/icon.png",
     apple: "/icon.png",
   },
 
   openGraph: {
     title: "VRED - Chatbot Empatik Berbasis AI",
+
     description:
       "VRED merupakan chatbot empatik berbasis Retrieval-Augmented Generation (RAG) dan Large Language Model.",
 
@@ -88,9 +84,12 @@ export const metadata: Metadata = {
 
   twitter: {
     card: "summary_large_image",
+
     title: "VRED - Chatbot Empatik Berbasis AI",
+
     description:
-      "Chatbot empatik berbasis Retrieval-Augmented Generation dan Large Language Model.",
+      "Chatbot empatik berbasis Retrieval-Augmented Generation (RAG) dan Large Language Model (LLM).",
+
     images: ["/icon.png"],
   },
 
@@ -101,6 +100,27 @@ export const metadata: Metadata = {
   category: "technology",
 };
 
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: "VRED",
+  alternateName: "VRED Bot",
+  url: "https://vredbot.my.id",
+  description:
+    "VRED adalah chatbot empatik berbasis Retrieval-Augmented Generation (RAG) dan Large Language Model (LLM).",
+  inLanguage: "id-ID",
+
+  publisher: {
+    "@type": "Organization",
+    name: "VRED",
+    url: "https://vredbot.my.id",
+    logo: {
+      "@type": "ImageObject",
+      url: "https://vredbot.my.id/icon.png",
+    },
+  },
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -108,7 +128,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id">
-      <body>{children}</body>
+      <body>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(jsonLd),
+          }}
+        />
+        {children}
+      </body>
     </html>
   );
 }

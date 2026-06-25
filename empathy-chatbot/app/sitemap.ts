@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl =
-    process.env.NEXT_PUBLIC_SITE_URL || "https://vredai.pages.dev";
+    process.env.NEXT_PUBLIC_SITE_URL || "https://vredbot.my.id";
 
   return [
     {

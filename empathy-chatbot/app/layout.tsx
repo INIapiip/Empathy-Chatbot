@@ -96,6 +96,9 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "https://vredbot.my.id",
   },
+verification: {
+  google: "UhIA6g24P4MpvGbG2kVIlMZaAK1Q074rXo5FOfescZg",
+},
 
   category: "technology",
 };

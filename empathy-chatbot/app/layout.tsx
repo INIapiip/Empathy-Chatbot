@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     "Mental Health Chatbot",
     "Chatbot Indonesia",
   ],
-
+// SEO UPDATE
   authors: [
     {
       name: "Nama Kamu",

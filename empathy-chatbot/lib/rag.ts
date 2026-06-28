@@ -231,7 +231,7 @@ export function retrieveContext(message: string): string {
     dedupedDocs.push(doc);
   }
 
-  const topDocs = dedupedDocs.slice(0, 3);
+  const topDocs = dedupedDocs.slice(0, 1);
 
   if (topDocs.length === 0) {
     return "";

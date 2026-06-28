@@ -28,6 +28,12 @@ export const metadata: Metadata = {
     "Teman Curhat AI",
     "Mental Health Chatbot",
     "Chatbot Indonesia",
+    "Empathy Chatbot",
+    "Empathetic Chatbot",
+    "AI Companion",
+    "Virtual Discussion",
+    "Emotional Support",
+    "Indonesia AI",
   ],
 
   authors: [
